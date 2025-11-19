@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Juanchos Admin</title>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- Estilos CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <style>
+        .date-filter {
+            text-align: center;
+            margin: 20px;
+        }
+        .date-filter label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍔 Juanchos - Panel de Administración</h1>
+        <button class="logout-btn" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+
+    <div class="date-filter">
+        <label for="fechaSelector">Ver pedidos del día:</label>
+        <input type="date" id="fechaSelector" onchange="cambiarFecha()">
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <h3>Pedidos Totales</h3>
+            <div class="number" id="totalPedidos">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>Pedidos Pendientes</h3>
+            <div class="number" id="pedidosPendientes">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>En Preparación</h3>
+            <div class="number" id="pedidosPreparacion">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>Total del Día</h3>
+            <div class="number" id="totalVentas">S/ 0</div>
+        </div>
+    </div>
+
+    <div class="filters">
+        <button class="filter-btn active" onclick="filtrarPedidos('todos')">Todos</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Pendiente')">Pendientes</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Esperando pago')">Esperando Pago</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Pedido aceptado')">Aceptados</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Preparando pedido')">En Preparación</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Pedido listo')">Listos</button>
+        <button class="filter-btn" onclick="filtrarPedidos('Pedido enviado')">Enviados</button>
+    </div>
+
+    <div class="pedidos-container" id="pedidosContainer">
+        <div class="loading">Cargando pedidos...</div>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN DE FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyA8kwhiKJSGLBZRLi1yrXmdnUWGXnY-kgU",
+            authDomain: "castillo-sem6.firebaseapp.com",
+            projectId: "castillo-sem6",
+            storageBucket: "castillo-sem6.firebasestorage.app",
+            messagingSenderId: "656452655199",
+            appId: "1:656452655199:web:caef2c8cf7d35b549d63ea",
+            measurementId: "G-9GZ0L36WNT"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let todosPedidos = [];
+        let filtroActual = 'todos';
+        let fechaSeleccionada = new Date().toISOString().split('T')[0];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('fechaSelector').value = fechaSeleccionada;
+
+            auth.onAuthStateChanged(user => {
+                if (!user) {
+                    window.location.href = 'index.html';
+                } else {
+                    cargarPedidos();
+                }
+            });
+        });
+
+        function cambiarFecha() {
+            fechaSeleccionada = document.getElementById('fechaSelector').value;
+            actualizarEstadisticas();
+            mostrarPedidos();
+        }
+
+        function cargarPedidos() {
+            document.getElementById('pedidosContainer').innerHTML = '<div class="loading">Cargando pedidos...</div>';
+
+            db.collection('pedidos').onSnapshot(snapshot => {
+                todosPedidos = [];
+                snapshot.forEach(doc => {
+                    todosPedidos.push({ id: doc.id, ...doc.data() });
+                });
+
+                todosPedidos.sort((a, b) => {
+                    if (!a.fecha || !b.fecha) return 0;
+                    const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
+                    const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
+                    return fechaB - fechaA;
+                });
+
+                actualizarEstadisticas();
+                mostrarPedidos();
+            }, error => {
+                console.error('Error al cargar pedidos:', error);
+            });
+        }
+
+        function actualizarEstadisticas() {
+            const [year, month, day] = fechaSeleccionada.split('-').map(Number);
+            const inicioDia = new Date(year, month - 1, day, 0, 0, 0);
+            const finDia = new Date(year, month - 1, day, 23, 59, 59);
+
+            const totalPedidos = todosPedidos.length;
+            const pendientes = todosPedidos.filter(p =>
+                (p.estado === 'Pendiente' || p.estado === 'Esperando pago')
+            ).length;
+            const preparacion = todosPedidos.filter(p =>
+                p.estado === 'Preparando pedido'
+            ).length;
+
+            const ventasDia = todosPedidos
+                .filter(p => {
+                    if (!p.fecha) return false;
+                    const fechaPedido = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+                    return fechaPedido >= inicioDia && fechaPedido <= finDia;
+                })
+                .reduce((sum, p) => sum + (p.total_final || 0), 0);
+
+            document.getElementById('totalPedidos').textContent = totalPedidos;
+            document.getElementById('pedidosPendientes').textContent = pendientes;
+            document.getElementById('pedidosPreparacion').textContent = preparacion;
+            document.getElementById('totalVentas').textContent = `S/ ${ventasDia.toFixed(2)}`;
+        }
+
+        function mostrarPedidos() {
+            const container = document.getElementById('pedidosContainer');
+            const [year, month, day] = fechaSeleccionada.split('-').map(Number);
+            const inicioDia = new Date(year, month - 1, day, 0, 0, 0);
+            const finDia = new Date(year, month - 1, day, 23, 59, 59);
+
+            let pedidosFiltrados = todosPedidos.filter(p => {
+                if (!p.fecha) return false;
+                const fechaPedido = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+                return fechaPedido >= inicioDia && fechaPedido <= finDia;
+            });
+
+            if (filtroActual !== 'todos') {
+                pedidosFiltrados = pedidosFiltrados.filter(p => p.estado === filtroActual);
+            }
+
+            if (pedidosFiltrados.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📦</div>
+                        <h3>No hay pedidos para este día</h3>
+                        <p>Selecciona otro día o verifica si hay pedidos registrados.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = pedidosFiltrados.map(p => crearTarjetaPedido(p)).join('');
+        }
+
+        function crearTarjetaPedido(pedido) {
+            const fecha = pedido.fecha ? (pedido.fecha.toDate ? pedido.fecha.toDate() : new Date(pedido.fecha)) : new Date();
+            const fechaFormato = `${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()} ${fecha.getHours()}:${fecha.getMinutes().toString().padStart(2, '0')}`;
+
+            const estadoClass = pedido.estado ? pedido.estado.toLowerCase().replace(/ /g, '-') : 'pendiente';
+            const tipoEntrega = pedido.tipo_entrega === 'delivery' ? '🚚 Delivery' : '🏪 Recojo en tienda';
+
+            const productos = pedido.productos || [];
+            const productosHTML = productos.map(p => `
+                <div class="producto-item">
+                    <span>${p.cantidad}x ${p.nombre || 'Producto'}</span>
+                    <span>S/ ${(p.subtotal || 0).toFixed(2)}</span>
+                </div>
+            `).join('');
+
+            const estadosDisponibles = pedido.tipo_entrega === 'delivery'
+                ? ['Pendiente', 'Esperando pago', 'Pedido aceptado', 'Preparando pedido', 'Pedido enviado', 'Entregado', 'Cancelado']
+                : ['Pendiente', 'Esperando pago', 'Pedido aceptado', 'Preparando pedido', 'Pedido listo', 'Entregado', 'Cancelado'];
+
+            const estadosOptions = estadosDisponibles.map(estado =>
+                `<option value="${estado}" ${pedido.estado === estado ? 'selected' : ''}>${estado}</option>`
+            ).join('');
+
+            return `
+                <div class="pedido-card">
+                    <div class="pedido-header">
+                        <div>
+                            <div class="pedido-id">Pedido #${pedido.id.substring(0, 8)}</div>
+                            <small style="color: #999;">${fechaFormato}</small>
+                        </div>
+                        <div>
+                            <span class="estado-badge estado-${estadoClass}">${pedido.estado || 'Pendiente'}</span>
+                        </div>
+                    </div>
+
+                    <div class="pedido-info">
+                        <div class="info-item">
+                            <div class="info-label">Cliente</div>
+                            <div class="info-value">${pedido.nombre_cliente || 'Sin nombre'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Teléfono</div>
+                            <div class="info-value">${pedido.telefono || 'No disponible'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Email</div>
+                            <div class="info-value">${pedido.email || 'No disponible'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tipo de entrega</div>
+                            <div class="info-value">
+                                <span class="tipo-entrega">${tipoEntrega}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${pedido.direccion_entrega ? `
+                        <div class="info-item" style="margin-bottom: 15px;">
+                            <div class="info-label">📍 Dirección de entrega</div>
+                            <div class="info-value">${pedido.direccion_entrega}</div>
+                        </div>
+                    ` : ''}
+
+                    ${pedido.notas ? `
+                        <div class="info-item" style="margin-bottom: 15px;">
+                            <div class="info-label">📝 Notas</div>
+                            <div class="info-value">${pedido.notas}</div>
+                        </div>
+                    ` : ''}
+
+                    <div class="pedido-productos">
+                        <strong>Productos (${pedido.cantidad_productos || productos.length}):</strong>
+                        ${productosHTML}
+                        ${pedido.costo_delivery > 0 ? `
+                            <div class="producto-item">
+                                <span>Costo de delivery</span>
+                                <span>S/ ${(pedido.costo_delivery || 0).toFixed(2)}</span>
+                            </div>
+                        ` : ''}
+                        <div class="total-pedido">Total: S/ ${(pedido.total_final || 0).toFixed(2)}</div>
+                    </div>
+
+                    <div class="pedido-actions">
+                        <select class="estado-select" id="estado-${pedido.id}">
+                            ${estadosOptions}
+                        </select>
+                        <button class="btn-actualizar" onclick="actualizarEstado('${pedido.id}')">
+                            Actualizar Estado
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function actualizarEstado(pedidoId) {
+            const nuevoEstado = document.getElementById(`estado-${pedidoId}`).value;
+            try {
+                await db.collection('pedidos').doc(pedidoId).update({ estado: nuevoEstado });
+                mostrarNotificacion('Estado actualizado correctamente', 'success');
+            } catch (error) {
+                mostrarNotificacion('Error al actualizar el estado', 'error');
+            }
+        }
+
+        function filtrarPedidos(filtro) {
+            filtroActual = filtro;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            mostrarPedidos();
+        }
+
+        function mostrarNotificacion(mensaje, tipo) {
+            const notif = document.createElement('div');
+            notif.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                background: ${tipo === 'success' ? '#4caf50' : '#f44336'};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+            `;
+            notif.textContent = mensaje;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        function cerrarSesion() {
+            if (confirm('¿Estás seguro de cerrar sesión?')) {
+                auth.signOut().then(() => window.location.href = 'index.html');
+            }
+        }
+    </script>
+</body>
+</html>

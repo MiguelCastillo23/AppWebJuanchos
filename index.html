@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juanchos - Admin Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #ff9800;
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #ff9800;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #f57c00;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #ff9800;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🍔 Juanchos</h1>
+            <p>Panel de Administración</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Correo electrónico</label>
+                <input type="email" id="email" required placeholder="admin@juanchos.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn" id="loginBtn">Iniciar Sesión</button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #666;">Iniciando sesión...</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (usa la versión compat para mayor facilidad) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // Configuración de Firebase - NUEVA CONFIGURACIÓN WEB
+        const firebaseConfig = {
+            apiKey: "AIzaSyA8kwhiKJSGLBZRLi1yrXmdnUWGXnY-kgU",
+            authDomain: "castillo-sem6.firebaseapp.com",
+            projectId: "castillo-sem6",
+            storageBucket: "castillo-sem6.firebasestorage.app",
+            messagingSenderId: "656452655199",
+            appId: "1:656452655199:web:caef2c8cf7d35b549d63ea",
+            measurementId: "G-9GZ0L36WNT"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        console.log('🔥 Firebase configurado correctamente para app web');
+
+        // Verificar si ya está logueado
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                console.log('✅ Usuario ya autenticado:', user.email);
+                window.location.href = 'dashboard.html';
+            } else {
+                console.log('🔐 No hay usuario autenticado');
+            }
+        });
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('errorMessage');
+            const loginBtn = document.getElementById('loginBtn');
+            const loading = document.getElementById('loading');
+
+            errorMessage.style.display = 'none';
+            loginBtn.disabled = true;
+            loading.style.display = 'block';
+
+            try {
+                console.log('🔄 Intentando login con:', email);
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                console.log('✅ Login exitoso:', userCredential.user.email);
+                window.location.href = 'dashboard.html';
+            } catch (error) {
+                console.error('❌ Error en login:', error);
+                
+                let errorMsg = 'Error al iniciar sesión';
+                
+                switch (error.code) {
+                    case 'auth/invalid-email':
+                        errorMsg = 'El formato del email es incorrecto';
+                        break;
+                    case 'auth/user-disabled':
+                        errorMsg = 'Esta cuenta ha sido deshabilitada';
+                        break;
+                    case 'auth/user-not-found':
+                        errorMsg = 'No existe una cuenta con este email';
+                        break;
+                    case 'auth/wrong-password':
+                        errorMsg = 'Contraseña incorrecta';
+                        break;
+                    case 'auth/network-request-failed':
+                        errorMsg = 'Error de conexión a internet';
+                        break;
+                    default:
+                        errorMsg = `Error: ${error.message}`;
+                }
+                
+                errorMessage.textContent = errorMsg;
+                errorMessage.style.display = 'block';
+                loginBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // Función para crear usuario admin (ejecutar en consola)
+        function crearUsuarioAdmin() {
+            const email = "admin@juanchos.com";
+            const password = "admin123";
+            
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    console.log('✅ Usuario admin creado:', userCredential.user);
+                    alert('Usuario admin creado exitosamente');
+                })
+                .catch((error) => {
+                    console.error('❌ Error creando usuario:', error);
+                    alert('Error: ' + error.message);
+                });
+        }
+
+        // Para crear el usuario, descomenta la línea siguiente y ejecuta en consola:
+        // crearUsuarioAdmin();
+    </script>
+</body>
+</html>
