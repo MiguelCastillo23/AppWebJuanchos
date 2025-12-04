@@ -1,4 +1,4 @@
-
+// CONFIGURACIÓN DE FIREBASE
 const firebaseConfig = {
     apiKey: "AIzaSyA8kwhiKJSGLBZRLi1yrXmdnUWGXnY-kgU",
     authDomain: "castillo-sem6.firebaseapp.com",
@@ -13,12 +13,14 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// VARIABLES GLOBALES
 let todosPedidos = [];
 let todosProductos = [];
 let filtroActual = 'todos';
 let fechaSeleccionada = new Date().toISOString().split('T')[0];
 let productoEditando = null;
 
+// INICIALIZACIÓN
 document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('fechaSelector').value = fechaSeleccionada;
 
@@ -31,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Event Listeners
     document.getElementById('menuBtn').addEventListener('click', toggleSidebar);
     document.getElementById('sidebarOverlay').addEventListener('click', toggleSidebar);
     document.getElementById('fechaSelector').addEventListener('change', cambiarFecha);
@@ -40,12 +43,14 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnCerrarSesion').addEventListener('click', cerrarSesion);
     document.getElementById('formProducto').addEventListener('submit', guardarProducto);
 
+    // Sidebar items
     document.querySelectorAll('.sidebar-item[data-section]').forEach(item => {
         item.addEventListener('click', function() {
             cambiarSeccion(this.dataset.section);
         });
     });
 
+    // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             filtrarPedidos(this.dataset.filtro);
@@ -53,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+// FUNCIONES DE NAVEGACIÓN
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('active');
     document.getElementById('sidebarOverlay').classList.toggle('active');
@@ -79,14 +85,19 @@ function cambiarFecha() {
     mostrarPedidos();
 }
 
-function cargarPedidos() {
+async function cargarPedidos() {
     document.getElementById('pedidosContainer').innerHTML = '<div class="loading">Cargando pedidos...</div>';
 
-    db.collection('pedidos').onSnapshot(snapshot => {
+    db.collection('pedidos').onSnapshot(async snapshot => {
         todosPedidos = [];
+        
+        const pedidosPromises = [];
         snapshot.forEach(doc => {
-            todosPedidos.push({ id: doc.id, ...doc.data() });
+            const pedidoData = { id: doc.id, ...doc.data() };
+            pedidosPromises.push(cargarDatosUsuario(pedidoData));
         });
+
+        todosPedidos = await Promise.all(pedidosPromises);
 
         todosPedidos.sort((a, b) => {
             if (!a.fecha || !b.fecha) return 0;
@@ -100,6 +111,27 @@ function cargarPedidos() {
     }, error => {
         console.error('Error al cargar pedidos:', error);
     });
+}
+
+async function cargarDatosUsuario(pedido) {
+    if (pedido.correo_usuario) {
+        try {
+            const usuariosSnapshot = await db.collection('usuarios')
+                .where('email', '==', pedido.correo_usuario)
+                .limit(1)
+                .get();
+
+            if (!usuariosSnapshot.empty) {
+                const usuario = usuariosSnapshot.docs[0].data();
+                pedido.nombre_cliente = usuario.nombre || 'Sin nombre';
+                pedido.telefono = usuario.telefono || 'No disponible';
+            }
+        } catch (error) {
+            console.error('Error al cargar datos del usuario:', error);
+        }
+    }
+    
+    return pedido;
 }
 
 function actualizarEstadisticas() {
@@ -205,7 +237,7 @@ function crearTarjetaPedido(pedido) {
                 </div>
                 <div class="info-item">
                     <div class="info-label">Email</div>
-                    <div class="info-value">${pedido.email || 'No disponible'}</div>
+                    <div class="info-value">${pedido.correo_usuario || 'No disponible'}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Tipo de entrega</div>
