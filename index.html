@@ -25,7 +25,7 @@
                 <input type="password" id="password" required placeholder="••••••••">
             </div>
 
-            <button type="submit" class="btn" id="loginBtn">
+            <button type="submit" class="btn-log" id="loginBtn">
                 <span>Iniciar Sesión</span>
             </button>
         </form>
@@ -107,7 +107,7 @@
         border-color: #ff9800;
     }
 
-    .btn {
+    .btn-log {
         width: 100%;
         padding: 14px;
         background: #000;
@@ -122,7 +122,7 @@
         overflow: hidden;
     }
 
-    .btn::before {
+    .btn-log::before {
         content: "";
         position: absolute;
         inset: 0; 
@@ -132,12 +132,12 @@
         z-index: 1;
     }
 
-    .btn span {
+    .btn-log span {
         position: relative;
         z-index: 2;
     }
 
-    .btn:hover::before {
+    .btn-log:hover::before {
         opacity: 0.5;
     }
 
